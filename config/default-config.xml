@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<!--beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="
+       http://www.springframework.org/schema/beans
+       http://www.springframework.org/schema/beans/spring-beans.xsd"-->
+
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:util="http://www.springframework.org/schema/util"
+       xsi:schemaLocation="
+        http://www.springframework.org/schema/beans
+        http://www.springframework.org/schema/beans/spring-beans.xsd
+        http://www.springframework.org/schema/util
+        http://www.springframework.org/schema/util/spring-util.xsd">
+
+    <!--
+        Alter configuration below as needed.
+    -->
+    <bean class="org.apache.ignite.configuration.IgniteConfiguration">
+
+        <!--
+        Explicitly configure TCP discovery SPI to provide list of
+        initial nodes from the first cluster.
+        -->
+        <property name="discoverySpi">
+            <bean class="org.apache.ignite.spi.discovery.tcp.TcpDiscoverySpi">
+                <!-- Initial local port to listen to. -->
+                <property name="localPort" value="48500"/>
+
+                <!-- Changing local port range. This is an optional action. -->
+                <property name="localPortRange" value="20"/>
+
+                <!-- Setting up IP finder for this cluster -->
+                <property name="ipFinder">
+                    <bean class="org.apache.ignite.spi.discovery.tcp.ipfinder.vm.TcpDiscoveryVmIpFinder">
+                        <property name="addresses">
+                            <list>
+                                <!--
+                                Addresses and port range of nodes from the first cluster.
+                                127.0.0.1 can be replaced with actual IP addresses or host names. Port range is optional.
+                                -->
+                                <value>127.0.0.1:48500..48520</value>
+                            </list>
+                        </property>
+                    </bean>
+                </property>
+            </bean>
+        </property>
+
+        <!--
+        Explicitly configure TCP communication SPI changing local
+        port number for the nodes from the first cluster.
+        -->
+        <property name="communicationSpi">
+            <bean class="org.apache.ignite.spi.communication.tcp.TcpCommunicationSpi">
+                <property name="localPort" value="48100"/>
+            </bean>
+        </property>
+
+        <property name="cacheConfiguration">
+            <bean class="org.apache.ignite.configuration.CacheConfiguration">
+                <property name="name" value="PERSONCACHE"/>
+                <property name="queryEntities">
+                    <list>
+                        <bean class="org.apache.ignite.cache.QueryEntity">
+                            <property name="keyType" value="org.examples.MyKey"/>
+                            <property name="valueType" value="java.lang.String"/>
+                            <property name="valueFieldName" value="lastValue"/>
+                            <property name="fields">
+                                <map>
+                                    <entry key="firstName" value="java.lang.String"/>
+                                    <entry key="lastName" value="java.lang.String"/>
+                                    <entry key="lastValue" value="java.lang.String"/>
+                                </map>
+                            </property>
+                            <property name="keyFields">
+                                <set>
+                                    <value>firstName</value>
+                                    <value>lastName</value>
+                                </set>
+                            </property>
+                        </bean>
+                    </list>
+                </property>
+            </bean>
+        </property>
+
+
+<!--        <property name="includeEventTypes">-->
+<!--            <list>-->
+<!--                &lt;!&ndash;Task execution events&ndash;&gt;-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_TASK_STARTED"/>-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_TASK_FINISHED"/>-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_TASK_FAILED"/>-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_TASK_TIMEDOUT"/>-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_TASK_SESSION_ATTR_SET"/>-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_TASK_REDUCED"/>-->
+
+<!--                &lt;!&ndash;Cache events&ndash;&gt;-->
+<!--                <util:constant static-field="org.apache.ignite.events.EventType.EVT_CACHE_OBJECT_PUT"/>-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_CACHE_OBJECT_READ"/>-->
+<!--                            <util:constant static-field="org.apache.ignite.events.EventType.EVT_CACHE_OBJECT_REMOVED"/>-->
+<!--            </list>-->
+<!--        </property>-->
+
+        <property name="workDirectory" value="/tmp/ignite/work"/>
+        <property name="dataStorageConfiguration">
+            <bean class="org.apache.ignite.configuration.DataStorageConfiguration">
+                <property name="defaultDataRegionConfiguration">
+                    <bean class="org.apache.ignite.configuration.DataRegionConfiguration">
+                        <property name="persistenceEnabled" value="true"/>
+                        <property name="CdcEnabled" value="true"/>
+                    </bean>
+                </property>
+                <property name="CdcWalPath" value="/tmp/ignite/wal"/> <!-- must match walPath!!!!!!!! -->
+                <property name="walPath" value="/tmp/ignite/wal"/>
+                <property name="walMode" value="FSYNC"/>
+                <property name="walArchivePath" value="/tmp/ignite/walarchive"/>
+            </bean>
+        </property>
+    </bean>
+
+
+    <!--needed to start ./bin/ignite-cdc.sh
+        otherwise class org.apache.ignite.IgniteCheckedException: Exact 1 CaptureDataChangeConfiguration configuration should be defined. Found 0 -->
+    <bean class="org.apache.ignite.cdc.CdcConfiguration">
+        <!-- with this I get: Persistence and CDC disabled. Capture Data Change can't run!
+        to fix this I had to configure dataStorageConfiguration with <property name="CdcEnabled" value="true"/>
+        further I get: Cdc error
+        java.lang.NullPointerException: Cannot invoke "Object.getClass()" because "obj" is null
+        at org.apache.ignite.internal.cdc.CdcMain.runX(CdcMain.java:305)
+                            kctx.resource().injectGeneric(consumer.consumer());
+         -->
+        <!--property name="Consumer" value="#{streamer}"/-->
+        <property name="Consumer">
+            <bean id="streamer" class="org.apache.ignite.cdc.thin.IgniteToIgniteClientCdcStreamer">
+                <!--based on ignite-extensions/modules/cdc-ext/src/test/java/org/apache/ignite/cdc/CdcIgniteToIgniteReplicationTest.java -->
+                <property name="caches">
+                    <set>
+                        <!--value>STRINGCACHE</value-->
+                        <value>PERSONCACHE</value><!-- cache has to be created on the remote Ignite!!! otherwise "Cache with id not found" -->
+                    </set>
+                </property>
+                <property name="AliveCheckTimeout" value="200"/>
+                <property name="maxBatchSize" value="2"/>
+                <property name="DestinationClientConfiguration">
+                    <bean class="org.apache.ignite.configuration.ClientConfiguration">
+                        <property name="Addresses">
+                            <list>
+                                <!-- By default, Ignite accepts client connections on port 10800 -->
+                                <value>10.0.0.13:10800</value>
+                            </list>
+                        </property>
+                    </bean>
+                </property>
+            </bean>
+
+        </property>
+    </bean>
+
+
+</beans>

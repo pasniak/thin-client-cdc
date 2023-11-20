@@ -1,0 +1,1 @@
+Ignite sample Thin client with config XML for CDC and IgniteToIgniteClientCdcStreamer.
